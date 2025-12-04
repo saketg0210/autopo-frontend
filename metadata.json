@@ -1,0 +1,5 @@
+{
+  "name": "AutoPO - Intelligent Purchase Order Extractor",
+  "description": "Upload Purchase Order images or PDFs. This app uses Gemini 2.5 Flash Multimodal capabilities to analyze the document and automatically fill structured data columns without the need for custom model training.",
+  "requestFramePermissions": []
+}
