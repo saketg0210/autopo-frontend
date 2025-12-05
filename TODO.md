@@ -1,4 +1,0 @@
-- [ ] Create index.css with Tailwind import
-- [ ] Import index.css in index.tsx
-- [ ] Remove Tailwind CDN script from index.html
-- [ ] Test the setup by running dev server
