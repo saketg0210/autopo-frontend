@@ -1,34 +1,37 @@
-// src/services/geminiService.ts
 import { PurchaseOrderData, LineItem } from "../types";
 
+// Base URL for backend API
+const BACKEND_URL = "https://autopo-server.vercel.app";
+
+/**
+ * Helper: parse Gemini JSON response from proxy
+ */
 const parseGeminiResponseText = (res: any): any => {
   if (!res) return null;
 
-  const maybeText =
-    res?.text ||
-    res?.output?.[0]?.content?.[0]?.text ||
-    res?.candidates?.[0]?.content?.[0]?.text;
+  const maybeText = res?.text
+    || res?.output?.[0]?.content?.[0]?.text
+    || res?.candidates?.[0]?.content?.[0]?.text;
 
   if (!maybeText) return res;
 
   try {
     return typeof maybeText === "string" ? JSON.parse(maybeText) : maybeText;
-  } catch {
+  } catch (e) {
     return maybeText;
   }
 };
 
+/**
+ * Analyze a document (purchase order)
+ */
 export const analyzeDocument = async (
   fileBase64: string,
   mimeType: string
 ): Promise<PurchaseOrderData> => {
-
-  // your extraction prompt
   const textParts = [
     {
-      text: `Analyze this Purchase Order. Extract specific data points.
-
-EXTRACT ONLY THESE FIELDS:
+      text: `Analyze this Purchase Order. Extract ONLY these fields:
 - customerInternalId
 - customerRequestDate
 - poNumber
@@ -38,51 +41,33 @@ EXTRACT ONLY THESE FIELDS:
     }
   ];
 
-  // schema optional
-  const responseSchema = undefined;
-
-  const resp = await fetch(`${import.meta.env.VITE_API_URL}/api/analyzeDocument`, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    fileBase64,
-    mimeType,
-    textParts,
-    responseSchema
-  })
-});
-
+  const resp = await fetch(`${BACKEND_URL}/api/analyzeDocument`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fileBase64, mimeType, textParts })
+  });
 
   if (!resp.ok) {
     const errJson = await resp.json().catch(() => ({ error: "unknown" }));
     throw new Error(`Server error ${resp.status}: ${JSON.stringify(errJson)}`);
   }
 
-  // serverless returns: { status, extracted, raw }
-  const serverResp = await resp.json();
-  const extracted = parseGeminiResponseText(serverResp.extracted);
+  const data = await resp.json();
+  const extracted = parseGeminiResponseText(data);
 
-  // ───────────────────────────
-  //    Post-processing logic
-  // ───────────────────────────
-
+  // Post-process line items
   const today = new Date();
-  const formattedDate = today.toLocaleDateString('en-US');
-  const monthStr = today.toLocaleString('default', { month: 'short' }).toUpperCase();
+  const formattedDate = today.toLocaleDateString("en-US");
+  const monthStr = today.toLocaleString("default", { month: "short" }).toUpperCase();
 
   const rawLineItems = extracted?.lineItems || [];
-
-  const processedLineItems: LineItem[] = rawLineItems.map((item: any, index: number) => {
-    const serial = (index + 1).toString().padStart(4, "0");
-
-    return {
-      externalId: `DAR${monthStr}${serial}`,
-      lineNumber: index + 1,
-      item: item.item || "",
-      quantity: item.quantity || 0,
-      comments: ""
-    };
-  });
+  const processedLineItems: LineItem[] = rawLineItems.map((item: any, index: number) => ({
+    externalId: `DAR${monthStr}${(index + 1).toString().padStart(4, "0")}`,
+    lineNumber: index + 1,
+    item: item.item || "",
+    quantity: item.quantity || 0,
+    comments: ""
+  }));
 
   const finalData: PurchaseOrderData = {
     customerInternalId: extracted?.customerInternalId || "",
@@ -101,7 +86,9 @@ EXTRACT ONLY THESE FIELDS:
   return finalData;
 };
 
-
+/**
+ * Convert file to base64
+ */
 export const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -117,3 +104,4 @@ export const fileToBase64 = (file: File): Promise<string> => {
     reader.onerror = (error) => reject(error);
   });
 };
+
